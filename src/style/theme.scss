@@ -1,0 +1,57 @@
+.theme-dark {
+  --app-bg: #050816;
+  --app-bg-soft: #0b1024;
+  --app-surface: #101735;
+  --app-surface-2: #17204a;
+  --app-border: rgba(139, 92, 246, 0.24);
+
+  --app-primary: #8b5cf6;
+  --app-primary-soft: rgba(139, 92, 246, 0.16);
+  --app-cyan: #36d9ff;
+
+  --app-text: #f4f7ff;
+  --app-text-muted: #9aa4c7;
+  --app-text-subtle: #626d94;
+  --app-nav-bg: #050816;
+  --app-nav-text: #ffffff;
+
+  --app-tabbar-bg: rgba(8, 12, 32, 0.96);
+  --app-tabbar-border: rgba(139, 92, 246, 0.22);
+  --app-tabbar-text: #6f789e;
+  --app-tabbar-active: var(--app-primary);
+}
+
+.theme-light {
+  --app-bg: #f6f7ff;
+  --app-bg-soft: #eef1ff;
+  --app-surface: #ffffff;
+  --app-surface-2: #f3f0ff;
+  --app-border: rgba(109, 76, 255, 0.16);
+
+  --app-primary: #6d4cff;
+  --app-primary-soft: rgba(109, 76, 255, 0.12);
+  --app-cyan: #0ea5e9;
+
+  --app-text: #172033;
+  --app-text-muted: #66708f;
+  --app-text-subtle: #9098ad;
+  --app-nav-bg: #ffffff;
+  --app-nav-text: #000000;
+
+  --app-tabbar-bg: rgba(255, 255, 255, 0.96);
+  --app-tabbar-border: rgba(109, 76, 255, 0.14);
+  --app-tabbar-text: #8a91a8;
+  --app-tabbar-active: var(--app-primary);
+}
+
+.theme-dark,
+.theme-light {
+  --wot-color-theme: var(--app-primary);
+  --wot-button-primary-bg-color: var(--app-primary);
+  --wot-button-primary-border-color: var(--app-primary);
+  --wot-button-primary-color: #ffffff;
+  --wot-navbar-bg: var(--app-bg);
+  --wot-navbar-color: var(--app-text);
+  --wot-navbar-desc-color: var(--app-text-muted);
+}
+

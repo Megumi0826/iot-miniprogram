@@ -79,6 +79,16 @@ export default defineConfig({
     'i-carbon-user',
     'i-carbon-ibm-watson-language-translator',
     'i-carbon-menu',
+    'i-carbon-sun',
+    'i-carbon-moon',
+    'i-carbon-network-4',
+    'i-carbon-checkbox',
+    'i-carbon-checkbox-checked-filled',
+    'i-carbon-user-profile',
+    'i-carbon-devices',
+    'i-carbon-information',
+    'i-carbon-chevron-right',
+
   ],
   rules: [
     [

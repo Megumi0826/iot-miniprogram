@@ -73,8 +73,8 @@ onMounted(() => {
   })
 })
 // #endif
-const activeColor = 'var(--wot-color-theme, #1890ff)'
-const inactiveColor = '#666'
+const activeColor = 'var(--app-tabbar-active)'
+const inactiveColor = 'var(--app-tabbar-text)'
 function getColorByIndex(index: number) {
   return tabbarStore.curIdx === index ? activeColor : inactiveColor
 }
@@ -82,7 +82,7 @@ function getColorByIndex(index: number) {
 
 <template>
   <view v-if="customTabbarEnable" class="h-50px pb-safe">
-    <view class="border-and-fixed bg-white" @touchmove.stop.prevent>
+    <view class="border-and-fixed" @touchmove.stop.prevent>
       <view class="h-50px flex items-center">
         <view
           v-for="(item, index) in tabbarList" :key="index"
@@ -112,7 +112,8 @@ function getColorByIndex(index: number) {
   left: 0;
   right: 0;
   z-index: 1000;
-  border-top: 1px solid #eee;
+  background: var(--app-tabbar-bg);
+  border-top: 1px solid var(--app-tabbar-border);
   box-sizing: border-box;
 }
 // 中间鼓包的样式

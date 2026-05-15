@@ -1,6 +1,16 @@
 // 测试用的 iconfont，可生效
 // @import './iconfont.css';
+@use '@wot-ui/ui/styles/theme/index.scss' as *;
+@use './theme.scss' as *;
 
+.app-root {
+  min-height: 100vh;
+  background: var(--app-bg);
+  color: var(--app-text);
+  transition:
+    background-color 0.28s ease,
+    color 0.28s ease;
+}
 .test {
   // 可以通过 @apply 多个样式封装整体样式
   @apply mt-4 ml-4;

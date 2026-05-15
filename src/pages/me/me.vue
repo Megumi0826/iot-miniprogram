@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 import { LOGIN_PAGE } from '@/router/config'
 import { useUserStore } from '@/store'
 import { useTokenStore } from '@/store/token'
@@ -12,68 +13,218 @@ definePage({
 
 const userStore = useUserStore()
 const tokenStore = useTokenStore()
-// 使用storeToRefs解构userInfo
 const { userInfo } = storeToRefs(userStore)
 
-// 微信小程序下登录
-async function handleLogin() {
-  // #ifdef MP-WEIXIN
-  // 微信登录
-  await tokenStore.wxLogin()
+const displayName = computed(() => {
+  return userInfo.value.nickname || userInfo.value.username || '微信用户'
+})
 
-  // #endif
-  // #ifndef MP-WEIXIN
-  uni.navigateTo({
-    url: `${LOGIN_PAGE}`,
+const avatarUrl = computed(() => {
+  return userInfo.value.avatar || '/static/images/default-avatar.png'
+})
+
+function handleTodo() {
+  uni.showToast({
+    title: '开发中',
+    icon: 'none',
   })
-  // #endif
 }
 
-function handleLogout() {
+async function handleLogout() {
   uni.showModal({
     title: '提示',
     content: '确定要退出登录吗？',
-    success: (res) => {
-      if (res.confirm) {
-        // 清空用户信息
-        useTokenStore().logout()
-        // 执行退出登录逻辑
-        uni.showToast({
-          title: '退出登录成功',
-          icon: 'success',
-        })
-        // #ifdef MP-WEIXIN
-        // 微信小程序，去首页
-        // uni.reLaunch({ url: '/pages/index/index' })
-        // #endif
-        // #ifndef MP-WEIXIN
-        // 非微信小程序，去登录页
-        // uni.navigateTo({ url: LOGIN_PAGE })
-        // #endif
-      }
+    success: async (res) => {
+      if (!res.confirm)
+        return
+
+      await tokenStore.logout()
+
+      uni.showToast({
+        title: '退出登录成功',
+        icon: 'success',
+      })
+
+      uni.reLaunch({
+        url: `${LOGIN_PAGE}?redirect=${encodeURIComponent('/pages/me/me')}`,
+      })
     },
   })
 }
 </script>
 
 <template>
-  <view class="profile-container">
-    <view class="mt-3 break-all px-3 text-center text-green-500">
-      {{ userInfo.username ? '已登录' : '未登录' }}
-    </view>
-    <view class="mt-3 break-all px-3">
-      {{ JSON.stringify(userInfo, null, 2) }}
-    </view>
+  <view class="me-page">
+    <yt-page-header title="我的" subtitle="管理账号资料与设备偏好" />
 
-    <view class="mt-[60vh] px-3">
-      <view class="m-auto w-160px text-center">
-        <button v-if="tokenStore.hasLogin" type="warn" class="w-full" @click="handleLogout">
-          退出登录
-        </button>
-        <button v-else type="primary" class="w-full" @click="handleLogin">
-          登录
-        </button>
+    <view class="me-content">
+      <view class="profile-card" @click="handleTodo">
+        <image class="profile-avatar" :src="avatarUrl" mode="aspectFill" />
+        <view class="profile-main">
+          <view class="profile-name">
+            {{ displayName }}
+          </view>
+          <view class="profile-desc">
+            完善头像、昵称与健康资料
+          </view>
+        </view>
+        <view class="profile-action">
+          完善资料
+        </view>
       </view>
+
+      <view class="menu-card">
+        <view class="menu-item" @click="handleTodo">
+          <view class="menu-left">
+            <view class="menu-icon i-carbon-user-profile" />
+            <view class="menu-title">
+              个人资料
+            </view>
+          </view>
+          <view class="menu-arrow i-carbon-chevron-right" />
+        </view>
+
+        <view class="menu-item" @click="handleTodo">
+          <view class="menu-left">
+            <view class="menu-icon i-carbon-devices" />
+            <view class="menu-title">
+              我的设备
+            </view>
+          </view>
+          <view class="menu-arrow i-carbon-chevron-right" />
+        </view>
+
+        <view class="menu-item" @click="handleTodo">
+          <view class="menu-left">
+            <view class="menu-icon i-carbon-information" />
+            <view class="menu-title">
+              关于我们
+            </view>
+          </view>
+          <view class="menu-arrow i-carbon-chevron-right" />
+        </view>
+      </view>
+
+      <wd-button
+        block
+        type="danger"
+        size="large"
+        custom-class="logout-button"
+        @click="handleLogout"
+      >
+        退出登录
+      </wd-button>
     </view>
   </view>
 </template>
+
+<style lang="scss" scoped>
+.me-page {
+  min-height: 100vh;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.me-content {
+  padding: 0 32rpx 48rpx;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  padding: 32rpx;
+  border: 1px solid var(--app-border);
+  border-radius: 28rpx;
+  background: var(--app-surface);
+  box-shadow: 0 18rpx 48rpx var(--app-primary-soft);
+}
+
+.profile-avatar {
+  flex-shrink: 0;
+  width: 112rpx;
+  height: 112rpx;
+  border: 2rpx solid var(--app-border);
+  border-radius: 50%;
+  background: var(--app-surface-2);
+}
+
+.profile-main {
+  min-width: 0;
+  flex: 1;
+  margin-left: 24rpx;
+}
+
+.profile-name {
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 34rpx;
+  font-weight: 700;
+  line-height: 44rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-desc {
+  margin-top: 8rpx;
+  color: var(--app-text-muted);
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.profile-action {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  color: var(--app-primary);
+  font-size: 24rpx;
+}
+
+.menu-card {
+  margin-top: 28rpx;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 28rpx;
+  background: var(--app-surface);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 104rpx;
+  padding: 0 28rpx;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.menu-item:last-child {
+  border-bottom: 0;
+}
+
+.menu-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.menu-icon {
+  flex-shrink: 0;
+  color: var(--app-primary);
+  font-size: 40rpx;
+}
+
+.menu-title {
+  margin-left: 20rpx;
+  color: var(--app-text);
+  font-size: 30rpx;
+}
+
+.menu-arrow {
+  color: var(--app-text-subtle);
+  font-size: 32rpx;
+}
+
+:deep(.logout-button) {
+  margin-top: 48rpx;
+  height: 92rpx;
+  border-radius: 24rpx;
+}
+</style>

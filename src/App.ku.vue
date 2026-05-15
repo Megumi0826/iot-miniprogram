@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { ref } from 'vue'
+import { useThemeStore } from '@/store/theme'
 import FgTabbar from '@/tabbar/index.vue'
 import { isPageTabbar } from './tabbar/store'
 import { currRoute } from './utils'
 
 const isCurrentPageTabbar = ref(true)
+const themeStore = useThemeStore()
+const { themeMode, themeClass } = storeToRefs(themeStore)
+
 onShow(() => {
   console.log('App.ku.vue onShow', currRoute())
   const { path } = currRoute()
@@ -18,8 +23,6 @@ onShow(() => {
   }
 })
 
-const helloKuRoot = ref('Hello AppKuVue')
-
 const exposeRef = ref('this is form app.Ku.vue')
 
 defineExpose({
@@ -28,14 +31,11 @@ defineExpose({
 </script>
 
 <template>
-  <view>
-    <!-- 这个先隐藏了，知道这样用就行 -->
-    <view class="hidden text-center">
-      {{ helloKuRoot }}，这里可以配置全局的东西
-    </view>
-
-    <KuRootView />
-
-    <FgTabbar v-if="isCurrentPageTabbar" />
+  <view class="app-root" :class="themeClass">
+    <wd-config-provider :theme="themeMode">
+      <KuRootView />
+      <yt-theme-float />
+      <FgTabbar v-if="isCurrentPageTabbar" />
+    </wd-config-provider>
   </view>
 </template>
