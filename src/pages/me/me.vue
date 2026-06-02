@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { uploadUserAvatar } from '@/api/login'
 import { LOGIN_PAGE } from '@/router/config'
 import { useUserStore } from '@/store'
 import { useTokenStore } from '@/store/token'
@@ -14,6 +15,7 @@ definePage({
 const userStore = useUserStore()
 const tokenStore = useTokenStore()
 const { userInfo } = storeToRefs(userStore)
+const avatarUploading = ref(false)
 
 const displayName = computed(() => {
   return userInfo.value.nickname || userInfo.value.username || '微信用户'
@@ -28,6 +30,40 @@ function handleTodo() {
     title: '开发中',
     icon: 'none',
   })
+}
+
+function handleChooseAvatar(event: any) {
+  const tempAvatarUrl = event.detail?.avatarUrl
+  if (!tempAvatarUrl) {
+    uni.showToast({
+      title: '未选择头像',
+      icon: 'none',
+    })
+    return
+  }
+
+  avatarUploading.value = true
+  const { run } = uploadUserAvatar(tempAvatarUrl, {
+    onSuccess: async (avatar) => {
+      userStore.setUserAvatar(avatar as unknown as string)
+      await userStore.fetchUserInfo()
+      uni.showToast({
+        title: '头像更新成功',
+        icon: 'success',
+      })
+    },
+    onError: () => {
+      uni.showToast({
+        title: '头像上传失败',
+        icon: 'none',
+      })
+    },
+    onComplete: () => {
+      avatarUploading.value = false
+    },
+  })
+
+  run()
 }
 
 async function handleLogout() {
@@ -59,7 +95,17 @@ async function handleLogout() {
 
     <view class="me-content">
       <view class="profile-card" @click="handleTodo">
-        <image class="profile-avatar" :src="avatarUrl" mode="aspectFill" />
+        <button
+          class="avatar-button"
+          open-type="chooseAvatar"
+          @click.stop
+          @chooseavatar="handleChooseAvatar"
+        >
+          <image class="profile-avatar" :src="avatarUrl" mode="aspectFill" />
+          <view v-if="avatarUploading" class="avatar-mask">
+            上传中
+          </view>
+        </button>
         <view class="profile-main">
           <view class="profile-name">
             {{ displayName }}
@@ -139,13 +185,40 @@ async function handleLogout() {
   box-shadow: 0 18rpx 48rpx var(--app-primary-soft);
 }
 
-.profile-avatar {
+.avatar-button {
+  position: relative;
   flex-shrink: 0;
+  width: 112rpx;
+  height: 112rpx;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--app-surface-2);
+  line-height: 1;
+
+  &::after {
+    border: 0;
+  }
+}
+
+.profile-avatar {
   width: 112rpx;
   height: 112rpx;
   border: 2rpx solid var(--app-border);
   border-radius: 50%;
   background: var(--app-surface-2);
+  box-sizing: border-box;
+}
+
+.avatar-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20rpx;
+  background: rgb(0 0 0 / 45%);
 }
 
 .profile-main {

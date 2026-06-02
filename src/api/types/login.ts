@@ -83,6 +83,10 @@ export interface IUpdateProfile {
   weight?: number
 }
 /**
+ * 用户头像
+ */
+export type IUpdateAvatarRes = string
+/**
  * 更新用户信息
  */
 export interface IUpdatePassword {

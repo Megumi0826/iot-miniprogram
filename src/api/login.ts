@@ -1,5 +1,7 @@
-import type { IAuthLoginRes, ICaptcha, IDoubleTokenRes, IUpdatePassword, IUpdateProfile, IUserInfoRes } from './types/login'
+import type { IAuthLoginRes, ICaptcha, IDoubleTokenRes, IUpdateAvatarRes, IUpdatePassword, IUpdateProfile, IUserInfoRes } from './types/login'
+import type { UploadOptions } from '@/utils/uploadFile'
 import { http } from '@/http/http'
+import { uploadFileUrl, useFileUpload } from '@/utils/uploadFile'
 
 /**
  * 登录表单
@@ -52,6 +54,24 @@ export function logout() {
  */
 export function updateProfile(data: IUpdateProfile) {
   return http.put<boolean>('/member/user/update-profile', data)
+}
+
+/**
+ * 用户上传头像
+ */
+export function uploadUserAvatar(
+  filePath: string,
+  options: Omit<UploadOptions, 'sourceType' | 'sizeType' | 'count'> = {},
+) {
+  return useFileUpload<IUpdateAvatarRes>(
+    uploadFileUrl.USER_AVATAR,
+    filePath,
+    {},
+    {
+      maxSize: 5,
+      ...options,
+    },
+  )
 }
 
 /**
