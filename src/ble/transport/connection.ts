@@ -7,6 +7,9 @@ import type {
 } from './types'
 import { createBleTransportError } from './errors'
 
+const bleNotificationCallbacks = new Set<(payload: BleNotifyPayload) => void>()
+let bleNotificationListening = false
+
 function normalizeService(raw: BleService): BleService {
   return {
     uuid: raw.uuid,
@@ -29,6 +32,31 @@ function asUniBleWriteValue(value: ArrayBuffer): unknown[] {
 function asBleNotifyValue(value: unknown): ArrayBuffer {
   // DCloud legacy 类型声明为 any[]，但 uni 官方文档和运行时都返回 ArrayBuffer。
   return value as ArrayBuffer
+}
+
+function handleBleNotification(result: {
+  deviceId: string
+  serviceId: string
+  characteristicId: string
+  value: unknown
+}): void {
+  const payload: BleNotifyPayload = {
+    characteristicId: result.characteristicId,
+    deviceId: result.deviceId,
+    serviceId: result.serviceId,
+    value: asBleNotifyValue(result.value),
+  }
+
+  bleNotificationCallbacks.forEach(callback => callback(payload))
+}
+
+function ensureBleNotificationListener(): void {
+  if (bleNotificationListening) {
+    return
+  }
+
+  uni.onBLECharacteristicValueChange(handleBleNotification)
+  bleNotificationListening = true
 }
 
 export async function connectBleDevice(deviceId: string): Promise<void> {
@@ -104,17 +132,16 @@ export async function writeBleCharacteristic(options: BleWriteOptions): Promise<
 }
 
 export function onBleNotification(callback: (payload: BleNotifyPayload) => void): () => void {
-  uni.onBLECharacteristicValueChange((result) => {
-    callback({
-      deviceId: result.deviceId,
-      serviceId: result.serviceId,
-      characteristicId: result.characteristicId,
-      value: asBleNotifyValue(result.value),
-    })
-  })
+  bleNotificationCallbacks.add(callback)
+  ensureBleNotificationListener()
 
   return () => {
-    uni.offBLECharacteristicValueChange()
+    bleNotificationCallbacks.delete(callback)
+
+    if (bleNotificationCallbacks.size === 0) {
+      uni.offBLECharacteristicValueChange()
+      bleNotificationListening = false
+    }
   }
 }
 

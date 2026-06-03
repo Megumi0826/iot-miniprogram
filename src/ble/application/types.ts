@@ -99,7 +99,7 @@ export interface BleDeviceIdentity {
   /**
    * 设备类型。
    */
-  deviceType?: number
+  deviceType?: string
 
   /**
    * 固件版本。
@@ -109,7 +109,7 @@ export interface BleDeviceIdentity {
   /**
    * BLE 协议版本。
    */
-  protocolVersion?: number
+  protocolVersion?: string
 }
 
 /**
@@ -127,6 +127,11 @@ export interface BleDeviceStatus {
    * MQTT 状态码。
    */
   mqttStatus?: number
+
+  /**
+   * 雷达睡眠/综合状态查询状态码。
+   */
+  radarSleepStatus?: number
 
   /**
    * 是否已经配置过 WiFi。
