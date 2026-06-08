@@ -82,6 +82,7 @@ export default defineConfig({
     'i-carbon-sun',
     'i-carbon-moon',
     'i-carbon-network-4',
+    'i-carbon-bluetooth',
     'i-carbon-checkbox',
     'i-carbon-checkbox-checked-filled',
     'i-carbon-user-profile',

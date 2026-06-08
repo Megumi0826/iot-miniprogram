@@ -304,6 +304,8 @@ export const useBleStore = defineStore('ble', () => {
 
     try {
       const result = await scanNearbyDevices({
+        allowDuplicatesKey: true,
+        interval: 1000,
         onDeviceFound: (_device, devices) => {
           nearbyDevices.value = devices
         },
