@@ -1,6 +1,5 @@
 /** BLE 连接流程在小程序内使用的轻量状态。 */
-export type BleConnectionState =
-  | 'idle'
+export type BleConnectionState = | 'idle'
   | 'adapterReady'
   | 'scanning'
   | 'connecting'

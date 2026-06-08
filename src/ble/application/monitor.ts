@@ -2,6 +2,10 @@ import type { BleCharacteristicRef } from '../transport'
 import type { BleLocalConnection } from './connection'
 import type { BleCommandResponse } from './types'
 import {
+  RADAR_STATUS_CHAR_UUID,
+  RADAR_STREAM_CHAR_UUID,
+} from '../profiles'
+import {
   BleCommand,
   findTlv,
   FrameAssembler,
@@ -9,6 +13,7 @@ import {
   readTlvI16,
   readTlvU8,
   readTlvU16,
+  ResultCode,
   TlvType,
   tlvU16,
 } from '../protocol'
@@ -147,6 +152,22 @@ function isMonitorEventCharacteristic(
   return eventKeys.has(getCharacteristicKey(ref))
 }
 
+function isRadarMonitorCharacteristic(ref: BleCharacteristicRef): boolean {
+  const characteristicId = ref.characteristicId.toLowerCase()
+
+  return (
+    characteristicId === RADAR_STREAM_CHAR_UUID
+    || characteristicId === RADAR_STATUS_CHAR_UUID
+  )
+}
+
+function isRadarMonitorCommand(cmd: number): boolean {
+  return (
+    cmd === BleCommand.CONTINUOUS_PUSH
+    || cmd === BleCommand.RADAR_STATUS_PUSH
+  )
+}
+
 function readOptionalU8(tlvs: ReturnType<typeof parseTlvs>, type: TlvType): number | undefined {
   return readTlvU8(findTlv(tlvs, type))
 }
@@ -232,7 +253,11 @@ export function createRadarMonitorSession(
   let latestSnapshot: BleRadarMonitorSnapshot | undefined
 
   const snapshotCallbacks = new Set<(snapshot: BleRadarMonitorSnapshot) => void>()
-  const eventKeys = new Set(connection.channels.eventNotifies.map(getCharacteristicKey))
+  const eventKeys = new Set(
+    connection.channels.eventNotifies
+      .filter(isRadarMonitorCharacteristic)
+      .map(getCharacteristicKey),
+  )
   const assemblers = new Map<string, FrameAssembler>()
 
   function getAssembler(key: string): FrameAssembler {
@@ -271,6 +296,10 @@ export function createRadarMonitorSession(
     const frames = getAssembler(key).push(new Uint8Array(payload.value))
 
     frames.forEach((frame) => {
+      if (!isRadarMonitorCommand(frame.cmd)) {
+        return
+      }
+
       latestSnapshot = mergeRadarTlvsIntoSnapshot(latestSnapshot, parseTlvs(frame.payload))
       emitSnapshot(latestSnapshot)
     })
@@ -291,7 +320,7 @@ export function createRadarMonitorSession(
       { timeout },
     )
 
-    running = true
+    running = response.resultCode === ResultCode.SUCCESS
     return response
   }
 

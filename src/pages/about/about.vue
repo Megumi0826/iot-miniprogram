@@ -1,36 +1,6 @@
 <script lang="ts" setup>
-import type {
-  BleLocalConnection,
-  BleNearbyDevice,
-  BleRadarMonitorSession,
-  BleRadarMonitorSnapshot,
-} from '@/ble/application'
 import { onUnmounted, ref } from 'vue'
-import {
-  configureWifi,
-  connectLocalDevice,
-  createRadarMonitorSession,
-  getDeviceStatusCodeDisplay,
-  getResultCodeDisplay,
-  queryDeviceStatus,
-  scanNearbyDevices,
-  scanWifiNetworks,
-} from '@/ble/application'
-import {
-  BleCommand,
-  decodeUtf8,
-  encodeFrame,
-  encodeTlvs,
-  encodeUtf8,
-  findTlv,
-  FrameAssembler,
-  parseTlvs,
-  readTlvString,
-  readTlvU8,
-  tlvString,
-  TlvType,
-  tlvU8,
-} from '@/ble/protocol'
+import { useBleStore } from '@/store'
 
 definePage({
   style: {
@@ -38,27 +8,17 @@ definePage({
   },
 })
 
-const protocolTestLogs = ref<string[]>([])
-const nearbyDevices = ref<BleNearbyDevice[]>([])
+const bleStore = useBleStore()
+const logs = ref<string[]>([])
 const wifiSsid = ref('')
 const wifiPassword = ref('')
 
-let stopBleScan: (() => Promise<void>) | undefined
-let currentConnection: BleLocalConnection | undefined
-let currentMonitor: BleRadarMonitorSession | undefined
-
-function bytesToHex(bytes: Uint8Array) {
-  return Array.from(bytes)
-    .map(byte => byte.toString(16).toUpperCase().padStart(2, '0'))
-    .join(' ')
-}
-
 function addLog(message: string) {
-  protocolTestLogs.value = [...protocolTestLogs.value, message]
+  logs.value = [...logs.value, message]
 }
 
-function clearProtocolTestLogs() {
-  protocolTestLogs.value = []
+function clearLogs() {
+  logs.value = []
 }
 
 function formatError(error: unknown): string {
@@ -69,7 +29,15 @@ function formatError(error: unknown): string {
   return JSON.stringify(error)
 }
 
-function formatSnapshotValue(value: number | boolean | undefined): string {
+function formatBoolean(value?: boolean): string {
+  if (value === undefined) {
+    return '无'
+  }
+
+  return value ? '是' : '否'
+}
+
+function formatMonitorValue(value: number | boolean | undefined, unit = ''): string {
   if (value === undefined) {
     return '无'
   }
@@ -78,55 +46,67 @@ function formatSnapshotValue(value: number | boolean | undefined): string {
     return value ? '是' : '否'
   }
 
-  return String(value)
+  return `${value}${unit}`
 }
 
-function formatRadarSnapshot(snapshot: BleRadarMonitorSnapshot): string {
-  return [
-    `心率=${formatSnapshotValue(snapshot.heartRate)}`,
-    `呼吸=${formatSnapshotValue(snapshot.breathRate)}`,
-    `存在=${formatSnapshotValue(snapshot.presence)}`,
-    `运动=${formatSnapshotValue(snapshot.motion)}`,
-    `距离=${formatSnapshotValue(snapshot.distanceCm)}cm`,
-    `坐标=(${formatSnapshotValue(snapshot.posXmm)},${formatSnapshotValue(snapshot.posYmm)},${formatSnapshotValue(snapshot.posZmm)})`,
-    `体动=${formatSnapshotValue(snapshot.bodyMovement)}`,
-  ].join(', ')
+function formatTime(time: number): string {
+  return new Date(time).toLocaleTimeString()
 }
 
-async function testBleScan() {
+function formatSavedPassword(password?: string): string {
+  if (password === undefined) {
+    return '无'
+  }
+
+  if (!password) {
+    return '空'
+  }
+
+  return `已保存(${password.length}位)`
+}
+
+function logCurrentDeviceStatus() {
+  const identity = bleStore.currentIdentity
+  const status = bleStore.currentStatus
+
+  addLog(`连接状态: ${bleStore.connectionState}`)
+  addLog(`设备: ${bleStore.currentDevice?.name || '无'}`)
+  addLog(`dn: ${identity?.dn || '无'}`)
+  addLog(`SN: ${identity?.deviceSn || '无'}`)
+  addLog(`MAC: ${identity?.macAddress || '无'}`)
+  addLog(`设备类型: ${identity?.deviceType || '无'}`)
+  addLog(`固件: ${identity?.firmwareVersion || '无'}`)
+  addLog(`协议版本: ${identity?.protocolVersion || '无'}`)
+  addLog(`WiFi 状态: ${status?.wifiStatus ?? '无'}`)
+  addLog(`MQTT 状态: ${status?.mqttStatus ?? '无'}`)
+  addLog(`雷达睡眠查询状态: ${status?.radarSleepStatus ?? '无'}`)
+  addLog(`WiFi 已配置: ${formatBoolean(status?.wifiConfigured)}`)
+  addLog(`WiFi 已连接: ${formatBoolean(status?.wifiConnected)}`)
+  addLog(`IP: ${status?.ipAddress || '无'}`)
+}
+
+async function testStoreScan() {
   try {
-    nearbyDevices.value = []
-    await stopBleScan?.()
-
-    const result = await scanNearbyDevices({
-      allowDuplicatesKey: true,
-      onDeviceFound: (device, devices) => {
-        nearbyDevices.value = devices
-        addLog(`发现设备: ${device.name}, RSSI=${device.RSSI ?? '未知'}, type=${device.profileType}`)
-      },
-    })
-
-    stopBleScan = result.stop
-    addLog('BLE 扫描已开始')
+    await bleStore.startScan()
+    addLog('Store 扫描已开始')
   }
   catch (error) {
-    addLog(`BLE 扫描失败: ${formatError(error)}`)
+    addLog(`Store 扫描失败: ${formatError(error)}`)
   }
 }
 
-async function testStopBleScan() {
+async function testStoreStopScan() {
   try {
-    await stopBleScan?.()
-    stopBleScan = undefined
-    addLog('BLE 扫描已停止')
+    await bleStore.stopScan()
+    addLog('Store 扫描已停止')
   }
   catch (error) {
-    addLog(`停止扫描失败: ${formatError(error)}`)
+    addLog(`Store 停止扫描失败: ${formatError(error)}`)
   }
 }
 
-async function testConnectAndQueryStatus() {
-  const device = nearbyDevices.value[0]
+async function testStoreConnectFirstDevice() {
+  const device = bleStore.nearbyDevices[0]
 
   if (!device) {
     addLog('请先扫描到设备')
@@ -134,271 +114,165 @@ async function testConnectAndQueryStatus() {
   }
 
   try {
-    await stopBleScan?.()
-    stopBleScan = undefined
-
-    await currentConnection?.disconnect()
-    currentConnection = await connectLocalDevice(device.deviceId, {
-      enableEventNotify: true,
-      profile: device.profile,
-    })
-
-    addLog(`已连接: ${device.name}`)
-    addLog(`write: ${currentConnection.channels.write.characteristicId}`)
-    addLog(`response: ${currentConnection.channels.responseNotify?.characteristicId || '无'}`)
-    addLog(`events: ${currentConnection.channels.eventNotifies.length}`)
-
-    const result = await queryDeviceStatus(currentConnection)
-
-    addLog(`查询结果码: ${result.resultCode ?? '无'}`)
-    addLog(`dn: ${result.identity?.dn || '未解析到'}`)
-    addLog(`SN: ${result.identity?.deviceSn || '无'}`)
-    addLog(`MAC: ${result.identity?.macAddress || '无'}`)
-    addLog(`设备类型: ${result.identity?.deviceType || '无'}`)
-    addLog(`固件: ${result.identity?.firmwareVersion || '无'}`)
-    addLog(`协议版本: ${result.identity?.protocolVersion || '无'}`)
-    addLog(`WiFi 状态: ${result.status.wifiStatus ?? '无'}`)
-    addLog(`MQTT 状态: ${result.status.mqttStatus ?? '无'}`)
-    addLog(`雷达睡眠查询状态: ${result.status.radarSleepStatus ?? '无'}`)
-    addLog(`WiFi 已配置: ${result.status.wifiConfigured === undefined ? '无' : result.status.wifiConfigured ? '是' : '否'}`)
-    addLog(`WiFi 已连接: ${result.status.wifiConnected === undefined ? '无' : result.status.wifiConnected ? '是' : '否'}`)
-    addLog(`IP: ${result.status.ipAddress || '无'}`)
+    addLog(`开始连接: ${device.name}`)
+    await bleStore.connectDevice(device)
+    addLog('Store 连接成功')
+    logCurrentDeviceStatus()
   }
   catch (error) {
-    addLog(`连接/查询失败: ${formatError(error)}`)
+    addLog(`Store 连接失败: ${formatError(error)}`)
   }
 }
 
-async function testDisconnectBle() {
+async function testStoreRefreshStatus() {
   try {
-    await currentMonitor?.close()
-    currentMonitor = undefined
-    await currentConnection?.disconnect()
-    currentConnection = undefined
-    addLog('BLE 已断开')
+    await bleStore.refreshCurrentStatus()
+    addLog('Store 刷新状态成功')
+    logCurrentDeviceStatus()
   }
   catch (error) {
-    addLog(`断开 BLE 失败: ${formatError(error)}`)
+    addLog(`Store 刷新状态失败: ${formatError(error)}`)
   }
 }
 
-async function testStartRadarMonitor() {
-  if (!currentConnection) {
-    addLog('请先连接设备')
-    return
-  }
-
+async function testStoreDisconnect() {
   try {
-    await currentMonitor?.close()
-    currentMonitor = createRadarMonitorSession(currentConnection)
-
-    currentMonitor.onSnapshot((snapshot) => {
-      addLog(`监控快照: ${formatRadarSnapshot(snapshot)}`)
-    })
-
-    addLog('开始启动雷达实时监控...')
-
-    const response = await currentMonitor.start({
-      interval: 1000,
-    })
-
-    addLog(`启动监控结果: ${getResultCodeDisplay(response.resultCode)}`)
+    await bleStore.disconnectDevice()
+    addLog('Store 已断开')
   }
   catch (error) {
-    addLog(`启动监控失败: ${formatError(error)}`)
+    addLog(`Store 断开失败: ${formatError(error)}`)
   }
 }
 
-async function testStopRadarMonitor() {
-  if (!currentMonitor) {
-    addLog('监控未启动')
-    return
-  }
-
+async function testStoreScanWifi() {
   try {
-    const response = await currentMonitor.stop()
-    await currentMonitor.close()
-    currentMonitor = undefined
-
-    addLog(`停止监控结果: ${getResultCodeDisplay(response.resultCode)}`)
-  }
-  catch (error) {
-    addLog(`停止监控失败: ${formatError(error)}`)
-  }
-}
-
-async function testScanWifiNetworks() {
-  if (!currentConnection) {
-    addLog('请先连接设备')
-    return
-  }
-
-  try {
-    addLog('开始扫描 WiFi...')
-
-    const result = await scanWifiNetworks(currentConnection)
-
-    addLog(`WiFi 扫描结果: ${getResultCodeDisplay(result.resultCode)}`)
-    addLog(`WiFi 数量: ${result.count ?? result.networks.length}`)
-
-    if (result.networks.length === 0) {
-      addLog('未解析到 WiFi 热点')
-      return
-    }
+    const result = await bleStore.scanWifi()
+    addLog(`Store WiFi 扫描成功，数量: ${result.networks.length}`)
 
     result.networks.forEach((network, index) => {
       addLog(`${index + 1}. ${network.ssid}, RSSI=${network.rssi ?? '无'}, security=${network.security ?? '无'}`)
     })
   }
   catch (error) {
-    addLog(`WiFi 扫描失败: ${formatError(error)}`)
+    addLog(`Store WiFi 扫描失败: ${formatError(error)}`)
   }
 }
 
-async function testConfigureWifi() {
-  if (!currentConnection) {
-    addLog('请先连接设备')
-    return
-  }
+async function testStoreLoadSavedWifi() {
+  try {
+    const result = await bleStore.loadSavedWifiNetworks()
+    addLog(`Store 读取已保存 WiFi 成功，数量: ${result.networks.length}`)
 
-  if (!wifiSsid.value) {
-    addLog('请先输入 WiFi 名称')
+    result.networks.forEach((network, index) => {
+      addLog(`${index + 1}. ${network.ssid}, password=${formatSavedPassword(network.password)}`)
+    })
+  }
+  catch (error) {
+    addLog(`Store 读取已保存 WiFi 失败: ${formatError(error)}`)
+  }
+}
+
+async function testStoreConfigureWifiByInput() {
+  try {
+    await bleStore.configureWifiByInput(wifiSsid.value, wifiPassword.value)
+    addLog(`Store 手输配网成功: ${wifiSsid.value}`)
+    logCurrentDeviceStatus()
+  }
+  catch (error) {
+    addLog(`Store 手输配网失败: ${formatError(error)}`)
+  }
+}
+
+async function testStoreConfigureFirstSavedWifi() {
+  const network = bleStore.savedWifiNetworks[0]
+
+  if (!network) {
+    addLog('请先读取到设备已保存 WiFi')
     return
   }
 
   try {
-    addLog(`开始配网: ${wifiSsid.value}`)
-
-    const result = await configureWifi(currentConnection, {
-      password: wifiPassword.value,
-      ssid: wifiSsid.value,
-    })
-
-    addLog(`配网结果: ${getResultCodeDisplay(result.resultCode)}`)
-    addLog(`SSID: ${result.ssid || '无'}`)
-    addLog(`IP: ${result.ipAddress || '无'}`)
-
-    const status = await queryDeviceStatus(currentConnection)
-
-    addLog(`配网后 WiFi 状态: ${getDeviceStatusCodeDisplay(status.status.wifiStatus)}`)
-    addLog(`配网后 MQTT 状态: ${getDeviceStatusCodeDisplay(status.status.mqttStatus)}`)
-    addLog(`配网后 IP: ${status.status.ipAddress || '无'}`)
+    await bleStore.configureWifiBySavedNetwork(network)
+    addLog(`Store 已保存 WiFi 配网成功: ${network.ssid}`)
+    logCurrentDeviceStatus()
   }
   catch (error) {
-    addLog(`配网失败: ${formatError(error)}`)
+    addLog(`Store 已保存 WiFi 配网失败: ${formatError(error)}`)
+  }
+}
+
+async function testStoreDeleteFirstSavedWifi() {
+  const network = bleStore.savedWifiNetworks[0]
+
+  if (!network) {
+    addLog('请先读取到设备已保存 WiFi')
+    return
+  }
+
+  try {
+    await bleStore.deleteSavedWifi(network)
+    addLog(`Store 删除已保存 WiFi 成功: ${network.ssid}`)
+  }
+  catch (error) {
+    addLog(`Store 删除已保存 WiFi 失败: ${formatError(error)}`)
+  }
+}
+
+async function testStoreStartMonitor() {
+  try {
+    await bleStore.startMonitor()
+    addLog('Store 实时监控已启动')
+  }
+  catch (error) {
+    addLog(`Store 启动实时监控失败: ${formatError(error)}`)
+  }
+}
+
+async function testStoreStopMonitor() {
+  try {
+    await bleStore.stopMonitor()
+    addLog('Store 实时监控已停止')
+  }
+  catch (error) {
+    addLog(`Store 停止实时监控失败: ${formatError(error)}`)
   }
 }
 
 onUnmounted(() => {
-  void stopBleScan?.()
-  void currentMonitor?.close()
-  void currentConnection?.disconnect()
+  void bleStore.stopMonitor()
+  void bleStore.stopScan()
+  void bleStore.disconnectDevice()
 })
-
-function testUtf8Codec() {
-  const text = 'Radar_客厅_测试 WiFi 😀'
-  const encoded = encodeUtf8(text)
-  const decoded = decodeUtf8(encoded)
-
-  addLog(`UTF-8 原文: ${text}`)
-  addLog(`UTF-8 bytes: ${bytesToHex(encoded)}`)
-  addLog(`UTF-8 解码: ${decoded}`)
-  addLog(`UTF-8 结果: ${decoded === text ? '通过' : '失败'}`)
-}
-
-function testTlvCodec() {
-  const ssid = '家里的 WiFi 5G'
-  const password = '密码123456'
-  const tlvBytes = encodeTlvs([
-    tlvString(TlvType.SSID, ssid),
-    tlvString(TlvType.PASSWORD, password),
-    tlvU8(TlvType.RESULT_CODE, 0),
-  ])
-  const tlvs = parseTlvs(tlvBytes)
-  const ssidTlv = findTlv(tlvs, TlvType.SSID)
-  const passwordTlv = findTlv(tlvs, TlvType.PASSWORD)
-  const resultTlv = findTlv(tlvs, TlvType.RESULT_CODE)
-
-  addLog(`TLV bytes: ${bytesToHex(tlvBytes)}`)
-  addLog(`TLV 数量: ${tlvs.length}`)
-  addLog(`SSID: ${ssidTlv ? readTlvString(ssidTlv) : '未找到'}`)
-  addLog(`密码: ${passwordTlv ? readTlvString(passwordTlv) : '未找到'}`)
-  addLog(`结果码: ${resultTlv ? readTlvU8(resultTlv) : '未找到'}`)
-}
-
-function testFrameCodec() {
-  const payload = encodeTlvs([
-    tlvString(TlvType.SSID, 'Office_中文'),
-    tlvString(TlvType.PASSWORD, 'abc123中文'),
-  ])
-  const frameBytes = encodeFrame({
-    cmd: BleCommand.WIFI_CONFIG,
-    seq: 7,
-    payload,
-  })
-  const assembler = new FrameAssembler()
-  const firstFrames = assembler.push(frameBytes.slice(0, 8))
-  const secondFrames = assembler.push(frameBytes.slice(8))
-  const frame = secondFrames[0]
-
-  addLog(`Frame bytes: ${bytesToHex(frameBytes)}`)
-  addLog(`半包输入后帧数量: ${firstFrames.length}`)
-  addLog(`补齐输入后帧数量: ${secondFrames.length}`)
-  addLog(`Frame cmd: 0x${frame.cmd.toString(16).toUpperCase()}`)
-  addLog(`Frame seq: ${frame.seq}`)
-  addLog(`Frame payload TLV 数量: ${parseTlvs(frame.payload).length}`)
-}
-
-function testCrcFailure() {
-  const frameBytes = encodeFrame({
-    cmd: BleCommand.QUERY_STATUS,
-    seq: 8,
-    payload: encodeTlvs([tlvString(TlvType.DEVICE_SN, 'SN-中文-001')]),
-  })
-  const brokenFrameBytes = frameBytes.slice()
-  brokenFrameBytes[10] ^= 0xFF
-
-  const assembler = new FrameAssembler()
-  const frames = assembler.push(brokenFrameBytes)
-
-  addLog(`CRC 错误帧输入后帧数量: ${frames.length}`)
-  addLog(`CRC 错误帧结果: ${frames.length === 0 ? '通过，已丢弃' : '失败，错误帧被解析'}`)
-}
 </script>
 
 <template>
   <view class="about-page">
     <yt-page-header title="关于" />
 
-    <view class="protocol-test">
+    <view class="ble-store-test">
       <view class="test-title">
-        BLE 协议临时测试
+        BLE Store 测试
       </view>
 
       <view class="test-actions">
-        <button class="test-button" @click="testUtf8Codec">
-          测试 UTF-8
+        <button class="test-button" @click="testStoreScan">
+          Store 扫描
         </button>
-        <button class="test-button" @click="testTlvCodec">
-          测试 TLV
-        </button>
-        <button class="test-button" @click="testFrameCodec">
-          测试 Frame
-        </button>
-        <button class="test-button" @click="testCrcFailure">
-          测试 CRC 错误
-        </button>
-        <button class="test-button" @click="testBleScan">
-          扫描 BLE
-        </button>
-        <button class="test-button" @click="testStopBleScan">
+        <button class="test-button" @click="testStoreStopScan">
           停止扫描
         </button>
-        <button class="test-button" @click="testConnectAndQueryStatus">
-          连接并查询状态
+        <button class="test-button" @click="testStoreConnectFirstDevice">
+          连接首个设备
         </button>
-        <button class="test-button" @click="testScanWifiNetworks">
+        <button class="test-button" @click="testStoreRefreshStatus">
+          刷新状态
+        </button>
+        <button class="test-button" @click="testStoreScanWifi">
           扫描 WiFi
+        </button>
+        <button class="test-button" @click="testStoreLoadSavedWifi">
+          读取保存 WiFi
         </button>
         <input
           v-model="wifiSsid"
@@ -411,33 +285,228 @@ function testCrcFailure() {
           password
           placeholder="WiFi 密码"
         >
-        <button class="test-button" @click="testConfigureWifi">
-          测试配网
+        <button class="test-button" @click="testStoreConfigureWifiByInput">
+          手输配网
         </button>
-        <button class="test-button" @click="testStartRadarMonitor">
+        <button class="test-button" @click="testStoreConfigureFirstSavedWifi">
+          首个保存配网
+        </button>
+        <button class="test-button" @click="testStoreStartMonitor">
           开始监控
         </button>
-        <button class="test-button" @click="testStopRadarMonitor">
+        <button class="test-button" @click="testStoreStopMonitor">
           停止监控
         </button>
-        <button class="test-button secondary" @click="testDisconnectBle">
-          断开 BLE
+        <button class="test-button secondary" @click="testStoreDeleteFirstSavedWifi">
+          删除首个保存
         </button>
-        <button class="test-button secondary" @click="clearProtocolTestLogs">
+        <button class="test-button secondary" @click="testStoreDisconnect">
+          断开设备
+        </button>
+        <button class="test-button secondary" @click="clearLogs">
           清空日志
         </button>
       </view>
 
+      <view class="status-panel">
+        <view class="status-title">
+          Store 状态
+        </view>
+        <view class="status-line">
+          scanState: {{ bleStore.scanState }}
+        </view>
+        <view class="status-line">
+          connectionState: {{ bleStore.connectionState }}
+        </view>
+        <view class="status-line">
+          scanning: {{ bleStore.scanning ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          connecting: {{ bleStore.connecting ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          connected: {{ bleStore.connected ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          refreshingStatus: {{ bleStore.refreshingStatus ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          wifiScanning: {{ bleStore.wifiScanning ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          savedWifiLoading: {{ bleStore.savedWifiLoading ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          provisioning: {{ bleStore.provisioning ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          monitoring: {{ bleStore.monitoring ? '是' : '否' }}
+        </view>
+        <view class="status-line">
+          devices: {{ bleStore.nearbyDevices.length }}
+        </view>
+        <view v-if="bleStore.errorMessage" class="status-line error">
+          error: {{ bleStore.errorMessage }}
+        </view>
+      </view>
+
+      <view class="device-list">
+        <view class="section-title">
+          附近设备
+        </view>
+        <view
+          v-for="device in bleStore.nearbyDevices"
+          :key="device.deviceId"
+          class="device-item"
+        >
+          <view class="device-name">
+            {{ device.name }}
+          </view>
+          <view class="device-meta">
+            {{ device.profileName }} / RSSI={{ device.RSSI ?? '未知' }}
+          </view>
+        </view>
+        <view v-if="bleStore.nearbyDevices.length === 0" class="empty-text">
+          暂无设备，点击 Store 扫描。
+        </view>
+      </view>
+
+      <view class="status-panel">
+        <view class="status-title">
+          实时监控快照
+        </view>
+        <view class="status-line">
+          心率: {{ formatMonitorValue(bleStore.monitorSnapshot?.heartRate, ' bpm') }}
+        </view>
+        <view class="status-line">
+          呼吸: {{ formatMonitorValue(bleStore.monitorSnapshot?.breathRate, ' rpm') }}
+        </view>
+        <view class="status-line">
+          存在: {{ formatMonitorValue(bleStore.monitorSnapshot?.presence) }}
+        </view>
+        <view class="status-line">
+          运动: {{ formatMonitorValue(bleStore.monitorSnapshot?.motion) }}
+        </view>
+        <view class="status-line">
+          距离: {{ formatMonitorValue(bleStore.monitorSnapshot?.distanceCm, ' cm') }}
+        </view>
+        <view class="status-line">
+          坐标:
+          {{ formatMonitorValue(bleStore.monitorSnapshot?.posXmm) }},
+          {{ formatMonitorValue(bleStore.monitorSnapshot?.posYmm) }},
+          {{ formatMonitorValue(bleStore.monitorSnapshot?.posZmm) }}
+        </view>
+        <view class="status-line">
+          体动: {{ formatMonitorValue(bleStore.monitorSnapshot?.bodyMovement) }}
+        </view>
+        <view class="status-line">
+          样本数: {{ bleStore.monitorSamples.length }}
+        </view>
+      </view>
+
+      <view class="device-list">
+        <view class="section-title">
+          监控曲线样本
+        </view>
+        <view
+          v-for="(sample, index) in bleStore.monitorSamples.slice(-8)"
+          :key="`${sample.updatedAt}-${index}`"
+          class="device-item"
+        >
+          <view class="device-name">
+            {{ formatTime(sample.updatedAt) }}
+          </view>
+          <view class="device-meta">
+            心率={{ formatMonitorValue(sample.heartRate) }} /
+            呼吸={{ formatMonitorValue(sample.breathRate) }} /
+            距离={{ formatMonitorValue(sample.distanceCm, 'cm') }} /
+            体动={{ formatMonitorValue(sample.bodyMovement) }}
+          </view>
+        </view>
+        <view v-if="bleStore.monitorSamples.length === 0" class="empty-text">
+          暂无样本，连接设备后点击开始监控。
+        </view>
+      </view>
+
+      <view class="device-list">
+        <view class="section-title">
+          附近 WiFi
+        </view>
+        <view
+          v-for="network in bleStore.wifiNetworks"
+          :key="network.ssid"
+          class="device-item"
+        >
+          <view class="device-name">
+            {{ network.ssid }}
+          </view>
+          <view class="device-meta">
+            RSSI={{ network.rssi ?? '无' }} / security={{ network.security ?? '无' }}
+          </view>
+        </view>
+        <view v-if="bleStore.wifiNetworks.length === 0" class="empty-text">
+          暂无 WiFi，连接设备后点击扫描 WiFi。
+        </view>
+      </view>
+
+      <view class="device-list">
+        <view class="section-title">
+          已保存 WiFi
+        </view>
+        <view
+          v-for="network in bleStore.savedWifiNetworks"
+          :key="network.ssid"
+          class="device-item"
+        >
+          <view class="device-name">
+            {{ network.ssid }}
+          </view>
+          <view class="device-meta">
+            password={{ formatSavedPassword(network.password) }}
+          </view>
+        </view>
+        <view v-if="bleStore.savedWifiNetworks.length === 0" class="empty-text">
+          暂无已保存 WiFi，连接设备后点击读取保存 WiFi。
+        </view>
+      </view>
+
+      <view class="status-panel">
+        <view class="status-title">
+          当前连接
+        </view>
+        <view class="status-line">
+          设备: {{ bleStore.currentDevice?.name || '无' }}
+        </view>
+        <view class="status-line">
+          dn: {{ bleStore.currentIdentity?.dn || '无' }}
+        </view>
+        <view class="status-line">
+          MAC: {{ bleStore.currentIdentity?.macAddress || '无' }}
+        </view>
+        <view class="status-line">
+          固件: {{ bleStore.currentIdentity?.firmwareVersion || '无' }}
+        </view>
+        <view class="status-line">
+          WiFi 状态: {{ bleStore.currentStatus?.wifiStatus ?? '无' }}
+        </view>
+        <view class="status-line">
+          MQTT 状态: {{ bleStore.currentStatus?.mqttStatus ?? '无' }}
+        </view>
+        <view class="status-line">
+          IP: {{ bleStore.currentStatus?.ipAddress || '无' }}
+        </view>
+      </view>
+
       <view class="test-log">
         <view
-          v-for="(log, index) in protocolTestLogs"
+          v-for="(log, index) in logs"
           :key="`${index}-${log}`"
           class="test-line"
         >
           {{ log }}
         </view>
-        <view v-if="protocolTestLogs.length === 0" class="test-empty">
-          点击上面的按钮查看编码、解码和拆包结果。
+        <view v-if="logs.length === 0" class="empty-text">
+          点击上面的按钮查看 Store 扫描和连接结果。
         </view>
       </view>
     </view>
@@ -451,7 +520,7 @@ function testCrcFailure() {
   background: #f6f8fa;
 }
 
-.protocol-test {
+.ble-store-test {
   padding: 24rpx;
 }
 
@@ -496,13 +565,52 @@ function testCrcFailure() {
   line-height: 76rpx;
 }
 
+.status-panel,
+.device-list,
 .test-log {
   margin-top: 24rpx;
   padding: 20rpx;
-  min-height: 320rpx;
   border: 1rpx solid #d1d5db;
   border-radius: 8rpx;
   background: #ffffff;
+}
+
+.status-title,
+.section-title {
+  margin-bottom: 12rpx;
+  color: #111827;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.status-line {
+  margin-bottom: 8rpx;
+  color: #1f2937;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.status-line.error {
+  color: #dc2626;
+}
+
+.device-item {
+  margin-top: 12rpx;
+  padding: 14rpx;
+  border-radius: 8rpx;
+  background: #eff6ff;
+}
+
+.device-name {
+  color: #111827;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.device-meta {
+  margin-top: 6rpx;
+  color: #6b7280;
+  font-size: 22rpx;
 }
 
 .test-line {
@@ -514,7 +622,7 @@ function testCrcFailure() {
   word-break: break-all;
 }
 
-.test-empty {
+.empty-text {
   color: #6b7280;
   font-size: 26rpx;
   line-height: 1.5;

@@ -8,6 +8,7 @@ import type {
 import { createBleTransportError } from './errors'
 
 const bleNotificationCallbacks = new Set<(payload: BleNotifyPayload) => void>()
+
 let bleNotificationListening = false
 
 function normalizeService(raw: BleService): BleService {

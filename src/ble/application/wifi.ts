@@ -54,6 +54,24 @@ export interface BleWifiNetwork {
 }
 
 /**
+ * 设备内部已保存的 WiFi 配置。
+ *
+ * 新版硬件会在 CMD_GET_SAVED_WIFI 里返回 SSID 和 PASSWORD。
+ * password 保持可选，用于兼容旧固件或空密码网络。
+ */
+export interface BleSavedWifiNetwork {
+  /**
+   * WiFi 名称。
+   */
+  ssid: string
+
+  /**
+   * 设备内部保存的 WiFi 密码。
+   */
+  password?: string
+}
+
+/**
  * WiFi 扫描参数。
  */
 export interface ScanWifiNetworksOptions {
@@ -140,6 +158,56 @@ export interface ConfigureWifiResult {
   response: BleCommandResponse
 }
 
+/**
+ * 读取设备已保存 WiFi 的结果。
+ */
+export interface GetSavedWifiNetworksResult {
+  /**
+   * 命令结果码。
+   */
+  resultCode?: ResultCode
+
+  /**
+   * 硬件返回的已保存 WiFi 数量。
+   */
+  count?: number
+
+  /**
+   * 解析后的已保存 WiFi 列表。
+   */
+  networks: BleSavedWifiNetwork[]
+
+  /**
+   * 原始命令响应。
+   */
+  response: BleCommandResponse
+}
+
+/**
+ * 删除设备已保存 WiFi 的结果。
+ */
+export interface DeleteSavedWifiNetworkResult {
+  /**
+   * 命令结果码。
+   */
+  resultCode?: ResultCode
+
+  /**
+   * 被删除的 WiFi 名称。
+   */
+  ssid?: string
+
+  /**
+   * 删除后硬件剩余的已保存 WiFi 数量。
+   */
+  count?: number
+
+  /**
+   * 原始命令响应。
+   */
+  response: BleCommandResponse
+}
+
 function readOptionalString(tlvs: Tlv[], type: TlvType): string | undefined {
   const value = readTlvString(findTlv(tlvs, type))?.trim()
 
@@ -182,12 +250,42 @@ export function parseWifiNetworkItem(item: Tlv): BleWifiNetwork | undefined {
 }
 
 /**
+ * 解析单个已保存 WIFI_ITEM block。
+ *
+ * 新版硬件里每个已保存 WIFI_ITEM 的 value 是一组嵌套 TLV：
+ * - TLV_SSID string
+ * - TLV_PASSWORD string
+ */
+export function parseSavedWifiNetworkItem(item: Tlv): BleSavedWifiNetwork | undefined {
+  const tlvs = parseTlvs(item.value)
+  const ssid = readOptionalString(tlvs, TlvType.SSID)
+
+  if (!ssid) {
+    return undefined
+  }
+
+  return {
+    password: readOptionalString(tlvs, TlvType.PASSWORD),
+    ssid,
+  }
+}
+
+/**
  * 从 WiFi 扫描响应里解析热点列表。
  */
 export function parseWifiNetworks(tlvs: Tlv[]): BleWifiNetwork[] {
   return findTlvs(tlvs, TlvType.WIFI_ITEM)
     .map(parseWifiNetworkItem)
     .filter((network): network is BleWifiNetwork => !!network)
+}
+
+/**
+ * 从已保存 WiFi 响应里解析 WiFi 列表。
+ */
+export function parseSavedWifiNetworks(tlvs: Tlv[]): BleSavedWifiNetwork[] {
+  return findTlvs(tlvs, TlvType.WIFI_ITEM)
+    .map(parseSavedWifiNetworkItem)
+    .filter((network): network is BleSavedWifiNetwork => !!network)
 }
 
 /**
@@ -240,6 +338,48 @@ export async function configureWifi(
 
   return {
     ipAddress: readOptionalString(response.tlvs, TlvType.IP_ADDRESS),
+    response,
+    resultCode: response.resultCode,
+    ssid: readOptionalString(response.tlvs, TlvType.SSID),
+  }
+}
+
+/**
+ * 通过 BLE 读取设备内部已保存的 WiFi 列表。
+ *
+ * 新版硬件会返回 SSID 和 PASSWORD。
+ * 旧版硬件如果只返回 SSID，password 会是 undefined。
+ */
+export async function getSavedWifiNetworks(
+  connection: BleLocalConnection,
+): Promise<GetSavedWifiNetworksResult> {
+  const response = await connection.commandSession.sendCommand(
+    BleCommand.GET_SAVED_WIFI,
+    [],
+  )
+
+  return {
+    count: readOptionalU16(response.tlvs, TlvType.WIFI_COUNT),
+    networks: parseSavedWifiNetworks(response.tlvs),
+    response,
+    resultCode: response.resultCode,
+  }
+}
+
+/**
+ * 通过 BLE 删除设备内部保存的指定 WiFi。
+ */
+export async function deleteSavedWifiNetwork(
+  connection: BleLocalConnection,
+  ssid: string,
+): Promise<DeleteSavedWifiNetworkResult> {
+  const response = await connection.commandSession.sendCommand(
+    BleCommand.DELETE_SAVED_WIFI,
+    [tlvString(TlvType.SSID, ssid)],
+  )
+
+  return {
+    count: readOptionalU16(response.tlvs, TlvType.WIFI_COUNT),
     response,
     resultCode: response.resultCode,
     ssid: readOptionalString(response.tlvs, TlvType.SSID),

@@ -1,5 +1,4 @@
-export type BleTransportErrorCode =
-  | 'ADAPTER_OPEN_FAILED'
+export type BleTransportErrorCode = | 'ADAPTER_OPEN_FAILED'
   | 'ADAPTER_CLOSE_FAILED'
   | 'ADAPTER_STATE_FAILED'
   | 'SCAN_START_FAILED'
