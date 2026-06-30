@@ -8,8 +8,10 @@ import type {
 import { createBleTransportError } from './errors'
 
 const bleNotificationCallbacks = new Set<(payload: BleNotifyPayload) => void>()
+const bleConnectionStateCallbacks = new Set<(deviceId: string, connected: boolean) => void>()
 
 let bleNotificationListening = false
+let bleConnectionStateListening = false
 
 function normalizeService(raw: BleService): BleService {
   return {
@@ -51,6 +53,15 @@ function handleBleNotification(result: {
   bleNotificationCallbacks.forEach(callback => callback(payload))
 }
 
+function handleBleConnectionStateChange(result: {
+  deviceId: string
+  connected: boolean
+}): void {
+  bleConnectionStateCallbacks.forEach(callback =>
+    callback(result.deviceId, result.connected),
+  )
+}
+
 function ensureBleNotificationListener(): void {
   if (bleNotificationListening) {
     return
@@ -58,6 +69,15 @@ function ensureBleNotificationListener(): void {
 
   uni.onBLECharacteristicValueChange(handleBleNotification)
   bleNotificationListening = true
+}
+
+function ensureBleConnectionStateListener(): void {
+  if (bleConnectionStateListening) {
+    return
+  }
+
+  uni.onBLEConnectionStateChange(handleBleConnectionStateChange)
+  bleConnectionStateListening = true
 }
 
 export async function connectBleDevice(deviceId: string): Promise<void> {
@@ -149,11 +169,15 @@ export function onBleNotification(callback: (payload: BleNotifyPayload) => void)
 export function onBleConnectionStateChange(
   callback: (deviceId: string, connected: boolean) => void,
 ): () => void {
-  uni.onBLEConnectionStateChange((result) => {
-    callback(result.deviceId, result.connected)
-  })
+  bleConnectionStateCallbacks.add(callback)
+  ensureBleConnectionStateListener()
 
   return () => {
-    uni.offBLEConnectionStateChange()
+    bleConnectionStateCallbacks.delete(callback)
+
+    if (bleConnectionStateCallbacks.size === 0) {
+      uni.offBLEConnectionStateChange()
+      bleConnectionStateListening = false
+    }
   }
 }

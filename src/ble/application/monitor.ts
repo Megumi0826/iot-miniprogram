@@ -18,6 +18,7 @@ import {
   tlvU16,
 } from '../protocol'
 import { onBleNotification } from '../transport'
+import { getResultCodeDisplay } from './status-code'
 
 const DEFAULT_MONITOR_INTERVAL = 1000
 const DEFAULT_MONITOR_COMMAND_TIMEOUT = 8000
@@ -97,6 +98,19 @@ export interface StartRadarMonitorOptions {
 }
 
 /**
+ * 关闭监控会话时的清理策略。
+ */
+export interface CloseRadarMonitorSessionOptions {
+  /**
+   * 是否向设备发送停止连续推送命令。
+   *
+   * 主动离开监控页时保持 true；设备断电或系统回调 BLE 已断开时应传 false，
+   * 只清理小程序本地监听和缓存，避免对已经断开的设备继续发命令。
+   */
+  stopDevice?: boolean
+}
+
+/**
  * 雷达快照查询结果。
  */
 export interface QueryRadarSnapshotResult {
@@ -128,7 +142,7 @@ export interface BleRadarMonitorSession {
   /**
    * 关闭会话并清理监听。
    */
-  close: () => Promise<void>
+  close: (options?: CloseRadarMonitorSessionOptions) => Promise<void>
 
   /**
    * 监听快照更新。
@@ -312,6 +326,11 @@ export function createRadarMonitorSession(
 
     const timeout = options.timeout ?? DEFAULT_MONITOR_COMMAND_TIMEOUT
     const snapshotResult = await queryRadarSnapshot(connection, timeout)
+
+    if (snapshotResult.response.resultCode !== ResultCode.SUCCESS) {
+      throw new Error(`查询雷达快照失败：${getResultCodeDisplay(snapshotResult.response.resultCode)}`)
+    }
+
     emitSnapshot(snapshotResult.snapshot)
 
     const response = await connection.commandSession.sendCommand(
@@ -335,12 +354,14 @@ export function createRadarMonitorSession(
     return response
   }
 
-  async function close(): Promise<void> {
+  async function close(options: CloseRadarMonitorSessionOptions = {}): Promise<void> {
     if (closed) {
       return
     }
 
-    if (running) {
+    const stopDevice = options.stopDevice ?? true
+
+    if (running && stopDevice) {
       try {
         await stop()
       }

@@ -2,6 +2,7 @@
 import type { BleNearbyDevice } from '@/ble/application'
 import { computed, onUnmounted, ref } from 'vue'
 import { useBleStore } from '@/store/ble'
+import { getDeviceKey, useDeviceStore } from '@/store/device'
 
 definePage({
   style: {
@@ -11,6 +12,7 @@ definePage({
 })
 
 const bleStore = useBleStore()
+const deviceStore = useDeviceStore()
 const connectingDeviceId = ref('')
 
 const hasNearbyDevices = computed(() => bleStore.nearbyDevices.length > 0)
@@ -36,7 +38,7 @@ const scanningTitle = computed(() => {
 
 const scanningSubtitle = computed(() => {
   if (bleStore.connecting) {
-    return '正在初始化蓝牙连接并读取设备信息'
+    return '正在读取设备信息并启动实时监控'
   }
 
   if (bleStore.scanning) {
@@ -95,15 +97,8 @@ function isConnectingDevice(device: BleNearbyDevice) {
 }
 
 function goAfterConnected() {
-  const pages = getCurrentPages()
-
-  if (pages.length > 1) {
-    uni.navigateBack()
-    return
-  }
-
   uni.switchTab({
-    url: '/pages/about/about',
+    url: '/pages/device/index',
   })
 }
 
@@ -137,6 +132,11 @@ async function handleConnect(device: BleNearbyDevice) {
 
   try {
     await bleStore.connectDevice(device)
+    const record = deviceStore.rememberCurrentBleDevice()
+
+    if (record) {
+      deviceStore.selectDevice(getDeviceKey(record.productKey, record.dn))
+    }
 
     uni.showToast({
       icon: 'success',
@@ -271,7 +271,7 @@ onUnmounted(() => {
   box-sizing: border-box;
   background:
     radial-gradient(circle at 80% 8%, var(--app-primary-soft), transparent 28%),
-    radial-gradient(circle at 12% 34%, rgba(54, 217, 255, 0.1), transparent 24%), var(--app-bg);
+    radial-gradient(circle at 12% 34%, rgba(54, 217, 255, 0.1), transparent 24%), var(--app-page-bg);
   color: var(--app-text);
 }
 
@@ -383,7 +383,7 @@ onUnmounted(() => {
   border: 1px solid var(--app-border);
   border-radius: 24rpx;
   background: var(--app-surface);
-  box-shadow: 0 16rpx 42rpx var(--app-primary-soft);
+  box-shadow: 0 16rpx 42rpx var(--app-shadow);
   box-sizing: border-box;
 }
 

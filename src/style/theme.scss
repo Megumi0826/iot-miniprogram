@@ -1,51 +1,90 @@
 .theme-dark {
-  --app-bg: #050816;
-  --app-bg-soft: #0b1024;
-  --app-surface: #101735;
-  --app-surface-2: #17204a;
-  --app-border: rgba(139, 92, 246, 0.24);
+  --app-bg: #070b18;
+  --app-bg-soft: #10172a;
+  --app-surface: #121a33;
+  --app-surface-2: #1b2542;
+  --app-border: rgba(148, 163, 184, 0.18);
 
-  --app-primary: #8b5cf6;
-  --app-primary-soft: rgba(139, 92, 246, 0.16);
-  --app-cyan: #36d9ff;
+  --app-primary: #7c5cff;
+  --app-primary-soft: rgba(124, 92, 255, 0.18);
+  --app-cyan: #38d9ff;
+  --app-cyan-soft: rgba(56, 217, 255, 0.16);
 
-  --app-text: #f4f7ff;
-  --app-text-muted: #9aa4c7;
-  --app-text-subtle: #626d94;
-  --app-nav-bg: #050816;
+  --app-success: #36d976;
+  --app-success-soft: rgba(54, 217, 118, 0.16);
+  --app-warning: #f6b84b;
+  --app-warning-soft: rgba(246, 184, 75, 0.16);
+  --app-danger: #ff5f8f;
+  --app-danger-soft: rgba(255, 95, 143, 0.16);
+  --app-shadow: rgba(31, 41, 102, 0.34);
+  --app-star-1: rgba(255, 255, 255, 0.34);
+  --app-star-2: rgba(56, 217, 255, 0.26);
+  --app-star-3: rgba(124, 92, 255, 0.28);
+
+  --app-text: #f7f9ff;
+  --app-text-muted: #a8b3d6;
+  --app-text-subtle: #707b9f;
+  --app-nav-bg: #070b18;
   --app-nav-text: #ffffff;
 
-  --app-tabbar-bg: rgba(8, 12, 32, 0.96);
-  --app-tabbar-border: rgba(139, 92, 246, 0.22);
-  --app-tabbar-text: #6f789e;
+  --app-tabbar-bg: rgba(8, 12, 28, 0.96);
+  --app-tabbar-border: rgba(148, 163, 184, 0.16);
+  --app-tabbar-text: #7c86a8;
   --app-tabbar-active: var(--app-primary);
 }
 
 .theme-light {
-  --app-bg: #f6f7ff;
-  --app-bg-soft: #eef1ff;
+  --app-bg: #f7f9ff;
+  --app-bg-soft: #edf4ff;
   --app-surface: #ffffff;
-  --app-surface-2: #f3f0ff;
-  --app-border: rgba(109, 76, 255, 0.16);
+  --app-surface-2: #f1f6ff;
+  --app-border: rgba(104, 117, 153, 0.14);
 
-  --app-primary: #6d4cff;
-  --app-primary-soft: rgba(109, 76, 255, 0.12);
+  --app-primary: #635bff;
+  --app-primary-soft: rgba(99, 91, 255, 0.12);
   --app-cyan: #0ea5e9;
+  --app-cyan-soft: rgba(14, 165, 233, 0.12);
 
-  --app-text: #172033;
-  --app-text-muted: #66708f;
-  --app-text-subtle: #9098ad;
+  --app-success: #18b86f;
+  --app-success-soft: rgba(24, 184, 111, 0.12);
+  --app-warning: #f59e0b;
+  --app-warning-soft: rgba(245, 158, 11, 0.12);
+  --app-danger: #f43f7f;
+  --app-danger-soft: rgba(244, 63, 127, 0.12);
+  --app-shadow: rgba(78, 91, 146, 0.12);
+  --app-star-1: rgba(99, 91, 255, 0.13);
+  --app-star-2: rgba(14, 165, 233, 0.12);
+  --app-star-3: rgba(255, 255, 255, 0.86);
+
+  --app-text: #111827;
+  --app-text-muted: #64708a;
+  --app-text-subtle: #98a2b8;
   --app-nav-bg: #ffffff;
-  --app-nav-text: #000000;
+  --app-nav-text: #111827;
 
   --app-tabbar-bg: rgba(255, 255, 255, 0.96);
-  --app-tabbar-border: rgba(109, 76, 255, 0.14);
-  --app-tabbar-text: #8a91a8;
+  --app-tabbar-border: rgba(104, 117, 153, 0.12);
+  --app-tabbar-text: #8b95aa;
   --app-tabbar-active: var(--app-primary);
 }
 
 .theme-dark,
 .theme-light {
+  --app-page-bg:
+    radial-gradient(circle at 8% 14%, var(--app-star-1) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 16% 32%, var(--app-star-3) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 28% 24%, var(--app-star-2) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 48% 16%, var(--app-star-3) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 78% 10%, var(--app-star-1) 0 2rpx, transparent 3rpx),
+    radial-gradient(circle at 92% 28%, var(--app-star-2) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 58% 40%, var(--app-star-2) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 18% 58%, var(--app-star-3) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 42% 64%, var(--app-star-1) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 70% 62%, var(--app-star-1) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 36% 82%, var(--app-star-2) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 62% 88%, var(--app-star-2) 0 1rpx, transparent 2rpx),
+    radial-gradient(circle at 88% 86%, var(--app-star-3) 0 1rpx, transparent 2rpx), var(--app-bg);
+
   --wot-color-theme: var(--app-primary);
   --wot-button-primary-bg-color: var(--app-primary);
   --wot-button-primary-border-color: var(--app-primary);
@@ -54,4 +93,3 @@
   --wot-navbar-color: var(--app-text);
   --wot-navbar-desc-color: var(--app-text-muted);
 }
-

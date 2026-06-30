@@ -17,6 +17,8 @@ export default store
 
 // 模块统一导出
 export * from './ble'
+export * from './cloudMonitor'
+export * from './device'
 export * from './theme'
 export * from './token'
 export * from './user'

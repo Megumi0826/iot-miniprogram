@@ -5,11 +5,8 @@
 
 .app-root {
   min-height: 100vh;
-  background: var(--app-bg);
+  background: var(--app-page-bg);
   color: var(--app-text);
-  transition:
-    background-color 0.28s ease,
-    color 0.28s ease;
 }
 .test {
   // 可以通过 @apply 多个样式封装整体样式

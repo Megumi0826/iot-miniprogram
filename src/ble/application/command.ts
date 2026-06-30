@@ -1,8 +1,9 @@
 import type { BleResolvedChannels } from '../profiles'
-import type { BleCommand, Tlv } from '../protocol'
+import type { Tlv } from '../protocol'
 import type { BleNotifyPayload } from '../transport'
 import type { BleCommandResponse } from './types'
 import {
+  BleCommand,
   bytesToArrayBuffer,
   encodeFrame,
   encodeTlvs,
@@ -22,6 +23,7 @@ const DEFAULT_COMMAND_TIMEOUT = 8000
 const BLE_WRITE_CHUNK_SIZE = 20
 
 interface PendingCommand {
+  command: BleCommand
   sequence: number
   timer: ReturnType<typeof setTimeout>
   resolve: (response: BleCommandResponse) => void
@@ -120,6 +122,16 @@ function createCommandTimeoutError(sequence: number, timeout: number): Error {
   return new Error(`BLE command timeout: seq=${sequence}, timeout=${timeout}ms`)
 }
 
+function createUnexpectedCommandResponseError(
+  sequence: number,
+  expectedCommand: BleCommand,
+  actualCommand: number,
+): Error {
+  return new Error(
+    `BLE command response mismatch: seq=${sequence}, expected=0x${expectedCommand.toString(16)}, actual=0x${actualCommand.toString(16)}`,
+  )
+}
+
 function createMissingResponseNotifyError(): Error {
   return new Error('BLE response notify channel is missing')
 }
@@ -165,6 +177,7 @@ export function createBleCommandSession(
 
   let sequence = 0
   let closed = false
+  let commandQueue: Promise<void> = Promise.resolve()
   const assembler = new FrameAssembler()
   const pendingCommands = new Map<number, PendingCommand>()
 
@@ -204,6 +217,16 @@ export function createBleCommandSession(
       return
     }
 
+    if (frame.cmd !== pending.command && frame.cmd !== BleCommand.ERROR_RESP) {
+      cleanupPending(frame.seq)
+      pending.reject(createUnexpectedCommandResponseError(
+        frame.seq,
+        pending.command,
+        frame.cmd,
+      ))
+      return
+    }
+
     const tlvs = parseTlvs(frame.payload)
     const resultCode = getResultCode(tlvs)
 
@@ -230,10 +253,21 @@ export function createBleCommandSession(
     frames.forEach(handleResponseFrame)
   })
 
-  async function sendCommand(
+  function enqueueCommand(task: () => Promise<BleCommandResponse>): Promise<BleCommandResponse> {
+    const queued = commandQueue.then(task, task)
+
+    commandQueue = queued.then(
+      () => undefined,
+      () => undefined,
+    )
+
+    return queued
+  }
+
+  async function sendCommandNow(
     cmd: BleCommand,
-    tlvs: Uint8Array[] = [],
-    sendOptions: SendCommandOptions = {},
+    tlvs: Uint8Array[],
+    sendOptions: SendCommandOptions,
   ): Promise<BleCommandResponse> {
     if (closed) {
       throw createSessionClosedError()
@@ -255,6 +289,7 @@ export function createBleCommandSession(
       }, timeout)
 
       pendingCommands.set(currentSequence, {
+        command: cmd,
         sequence: currentSequence,
         timer,
         resolve,
@@ -271,6 +306,14 @@ export function createBleCommandSession(
     }
 
     return responsePromise
+  }
+
+  function sendCommand(
+    cmd: BleCommand,
+    tlvs: Uint8Array[] = [],
+    sendOptions: SendCommandOptions = {},
+  ): Promise<BleCommandResponse> {
+    return enqueueCommand(() => sendCommandNow(cmd, tlvs, sendOptions))
   }
 
   function close(): void {

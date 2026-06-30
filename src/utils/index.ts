@@ -126,13 +126,13 @@ export function getEnvBaseUrl() {
   // const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://ukw0y1.laf.run'
   // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://ukw0y1.laf.run'
   // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://ukw0y1.laf.run'
-  
+
   // const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'http://127.0.0.1:48080/app-api'
   // const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'http://127.0.0.1:48080/app-api'
   // const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'http://127.0.0.1:48080/app-api'
-    const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'http://8.138.160.177:48080/app-api'
-  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'http://8.138.160.177:48080/app-api'
-  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'http://8.138.160.177:48080/app-api'
+const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'https://springboot.lmhrt.cn/app-api'
+const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'https://springboot.lmhrt.cn/app-api'
+const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'https://springboot.lmhrt.cn/app-api'
   // 微信小程序端环境区分
   if (isMpWeixin) {
     const {

@@ -1,19 +1,39 @@
 <script lang="ts" setup>
 import { storeToRefs } from 'pinia'
+import { onUnmounted, ref } from 'vue'
 import { useThemeStore } from '@/store/theme'
 
 const themeStore = useThemeStore()
 const { isDark } = storeToRefs(themeStore)
+const isUserToggling = ref(false)
+let toggleTimer: ReturnType<typeof setTimeout> | null = null
 
 function handleToggle() {
+  isUserToggling.value = true
+
+  if (toggleTimer) {
+    clearTimeout(toggleTimer)
+  }
+
   themeStore.toggleTheme()
+
+  toggleTimer = setTimeout(() => {
+    isUserToggling.value = false
+    toggleTimer = null
+  }, 320)
 }
+
+onUnmounted(() => {
+  if (toggleTimer) {
+    clearTimeout(toggleTimer)
+  }
+})
 </script>
 
 <template>
   <view
     class="theme-switch"
-    :class="{ 'is-dark': isDark }"
+    :class="{ 'is-dark': isDark, 'is-user-toggling': isUserToggling }"
     role="button"
     @click="handleToggle"
   >
@@ -41,6 +61,9 @@ function handleToggle() {
   border-radius: 999rpx;
   background: linear-gradient(135deg, #9bd7ff 0%, #eaf7ff 100%);
   box-shadow: 0 8rpx 24rpx rgba(109, 76, 255, 0.16);
+}
+
+.theme-switch.is-user-toggling {
   transition:
     background 0.28s ease,
     border-color 0.28s ease,
@@ -72,6 +95,9 @@ function handleToggle() {
   border-radius: 50%;
   background: #ffd34d;
   box-shadow: 0 4rpx 12rpx rgba(255, 181, 30, 0.45);
+}
+
+.theme-switch.is-user-toggling .theme-switch__thumb {
   transition:
     transform 0.28s ease,
     background-color 0.28s ease,
@@ -89,6 +115,10 @@ function handleToggle() {
 .theme-switch__cloud,
 .theme-switch__star {
   position: absolute;
+}
+
+.theme-switch.is-user-toggling .theme-switch__cloud,
+.theme-switch.is-user-toggling .theme-switch__star {
   transition:
     opacity 0.24s ease,
     transform 0.28s ease;

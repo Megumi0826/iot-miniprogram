@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onHide, onLaunch, onShow } from '@dcloudio/uni-app'
 import { navigateToInterceptor } from '@/router/interceptor'
+import { useCloudMonitorStore, useDeviceStore } from '@/store'
 
 onLaunch((options) => {
   console.log('App.vue onLaunch', options)
@@ -15,10 +16,28 @@ onShow((options) => {
   else {
     navigateToInterceptor.invoke({ url: '/' })
   }
+
+  void startCloudDeviceStatus()
 })
 onHide(() => {
   console.log('App Hide')
+  useCloudMonitorStore().disconnect()
 })
+
+async function startCloudDeviceStatus() {
+  const deviceStore = useDeviceStore()
+  const cloudMonitorStore = useCloudMonitorStore()
+
+  try {
+    const devices = await deviceStore.loadBoundDevices()
+    if (devices.length) {
+      await cloudMonitorStore.subscribeDeviceStatus()
+    }
+  }
+  catch (error) {
+    console.warn('启动设备云端状态订阅失败:', error)
+  }
+}
 </script>
 
 <style lang="scss">

@@ -52,6 +52,7 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/uni_modules/lime-echart/components/lime-echart"
   ]
 }

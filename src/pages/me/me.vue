@@ -167,7 +167,7 @@ async function handleLogout() {
 <style lang="scss" scoped>
 .me-page {
   min-height: 100vh;
-  background: var(--app-bg);
+  background: var(--app-page-bg);
   color: var(--app-text);
 }
 
@@ -182,7 +182,7 @@ async function handleLogout() {
   border: 1px solid var(--app-border);
   border-radius: 28rpx;
   background: var(--app-surface);
-  box-shadow: 0 18rpx 48rpx var(--app-primary-soft);
+  box-shadow: 0 18rpx 48rpx var(--app-shadow);
 }
 
 .avatar-button {

@@ -29,6 +29,7 @@ import {
   scanWifiNetworks,
 } from '@/ble/application'
 import { ResultCode } from '@/ble/protocol'
+import { onBleConnectionStateChange } from '@/ble/transport'
 
 const SCAN_DURATION = 10000
 const MONITOR_INTERVAL = 1000
@@ -45,12 +46,14 @@ export type BleScanState = 'idle' | 'scanning' | 'stopping' | 'stopped' | 'error
 /**
  * 当前本地 BLE 连接状态。
  *
- * 连接成功的判定比较严格：必须完成蓝牙连接，并且 queryStatus 成功拿到设备身份。
+ * 小程序里的“连接成功”不是单纯的底层 BLE 已连接，而是设备已经进入可用状态：
+ * 必须完成 BLE 通道初始化、queryStatus 身份校验，并成功启动雷达实时监控。
  */
 export type BleConnectionState
   = | 'idle'
     | 'connecting'
     | 'queryingStatus'
+    | 'startingMonitor'
     | 'connected'
     | 'disconnecting'
     | 'disconnected'
@@ -146,6 +149,7 @@ export const useBleStore = defineStore('ble', () => {
   let scanTimer: ReturnType<typeof setTimeout> | null = null
   let monitorSession: BleRadarMonitorSession | null = null
   let stopMonitorSnapshotListener: (() => void) | null = null
+  let stopConnectionStateListener: (() => void) | null = null
   let lastMonitorSampleAt = 0
 
   /*
@@ -158,7 +162,8 @@ export const useBleStore = defineStore('ble', () => {
 
   const connecting = computed(() =>
     connectionState.value === 'connecting'
-    || connectionState.value === 'queryingStatus',
+    || connectionState.value === 'queryingStatus'
+    || connectionState.value === 'startingMonitor',
   )
   const connected = computed(() =>
     connectionState.value === 'connected'
@@ -216,6 +221,8 @@ export const useBleStore = defineStore('ble', () => {
    * 清理实时监控状态和 notify 监听。
    */
   function resetMonitorData() {
+    const session = monitorSession
+
     stopMonitorSnapshotListener?.()
     stopMonitorSnapshotListener = null
     monitorSession = null
@@ -223,6 +230,61 @@ export const useBleStore = defineStore('ble', () => {
     monitorSamples.value = []
     monitoring.value = false
     lastMonitorSampleAt = 0
+
+    if (session) {
+      void session.close({ stopDevice: false })
+    }
+  }
+
+  /**
+   * 被动断开时只清理小程序本地状态。
+   *
+   * 例如设备断电、离开蓝牙范围、系统主动断开连接时，不能再调用 closeBLEConnection，
+   * 也不应该继续向设备发送停止监控命令。
+   */
+  function handleUnexpectedDisconnected() {
+    currentConnection.value?.commandSession.close()
+    resetConnectionData()
+    connectionState.value = 'disconnected'
+    errorMessage.value = '蓝牙连接已断开'
+  }
+
+  /**
+   * 监听系统 BLE 连接状态变化。
+   *
+   * deviceStore 的 BLE 展示状态来自 bleStore.connected，
+   * 所以只要这里把运行态更新正确，设备页会自动刷新。
+   */
+  function handleBleConnectionStateChange(deviceId: string, isConnected: boolean) {
+    if (isConnected) {
+      return
+    }
+
+    const currentDeviceId = currentConnection.value?.deviceId
+      || currentDevice.value?.deviceId
+      || connectingDevice.value?.deviceId
+
+    if (!currentDeviceId || deviceId !== currentDeviceId) {
+      return
+    }
+
+    if (
+      connectionState.value === 'idle'
+      || connectionState.value === 'disconnecting'
+      || connectionState.value === 'disconnected'
+    ) {
+      return
+    }
+
+    handleUnexpectedDisconnected()
+  }
+
+  function ensureConnectionStateListener() {
+    if (stopConnectionStateListener) {
+      return
+    }
+
+    stopConnectionStateListener = onBleConnectionStateChange(handleBleConnectionStateChange)
   }
 
   /**
@@ -284,6 +346,54 @@ export const useBleStore = defineStore('ble', () => {
   function handleMonitorSnapshot(snapshot: BleRadarMonitorSnapshot) {
     monitorSnapshot.value = snapshot
     appendMonitorSample(snapshot)
+  }
+
+  /**
+   * 打开雷达监控会话。
+   *
+   * 这里是监控启动的唯一实现：
+   * - 先清空旧快照和曲线采样；
+   * - 创建 a1/a2 notify 监听；
+   * - queryRadar 拉一帧快照；
+   * - START_CONTINUOUS 开启持续推送。
+   *
+   * 连接流程必须走这里，只有监控成功启动后才允许进入 connected。
+   * startMonitor 仍保留给测试页或后续异常恢复入口复用。
+   */
+  async function openMonitorSession(connection: BleLocalConnection): Promise<BleCommandResponse> {
+    monitorSnapshot.value = null
+    monitorSamples.value = []
+    lastMonitorSampleAt = 0
+
+    const session = createRadarMonitorSession(connection)
+    const offSnapshot = session.onSnapshot(handleMonitorSnapshot)
+
+    monitorSession = session
+    stopMonitorSnapshotListener = offSnapshot
+
+    try {
+      const response = await session.start({
+        interval: MONITOR_INTERVAL,
+      })
+      assertCommandSuccess(response, '启动实时监控失败')
+
+      monitoring.value = true
+
+      return response
+    }
+    catch (error) {
+      offSnapshot()
+
+      try {
+        await session.close()
+      }
+      catch {
+        // 启动失败后的清理不覆盖真正的启动失败原因。
+      }
+
+      resetMonitorData()
+      throw error
+    }
   }
 
   /**
@@ -362,7 +472,8 @@ export const useBleStore = defineStore('ble', () => {
    * 1. 停止扫描，避免浪费资源；
    * 2. 断开旧连接，第一版只允许单设备连接；
    * 3. 建立 BLE 连接；
-   * 4. queryStatus 成功并拿到 dn 后，才进入 connected。
+   * 4. queryStatus 成功并拿到 dn；
+   * 5. queryRadar + START_CONTINUOUS 成功后，才进入 connected。
    */
   async function connectDevice(device: BleNearbyDevice) {
     clearError()
@@ -388,6 +499,9 @@ export const useBleStore = defineStore('ble', () => {
       const statusResult = await queryDeviceStatus(nextConnection)
       assertQueryStatusSuccess(statusResult)
 
+      connectionState.value = 'startingMonitor'
+      await openMonitorSession(nextConnection)
+
       currentConnection.value = nextConnection
       currentDevice.value = device
       currentIdentity.value = statusResult.identity || null
@@ -403,7 +517,7 @@ export const useBleStore = defineStore('ble', () => {
           await nextConnection.disconnect()
         }
         catch {
-          // queryStatus 失败后断开失败，不覆盖真正的连接失败原因。
+          // 连接校验失败后的断开失败，不覆盖真正的失败原因。
         }
       }
 
@@ -454,7 +568,8 @@ export const useBleStore = defineStore('ble', () => {
   /**
    * 启动实时监控。
    *
-   * application/monitor 会先查询一次雷达快照，再发送 START_CONTINUOUS。
+   * 普通页面不需要主动调用它；BLE 连接流程会自动启动监控。
+   * 这个 action 主要用于测试页，或未来做“监控异常后手动恢复”。
    */
   async function startMonitor(): Promise<BleCommandResponse> {
     const connection = getCurrentConnection()
@@ -462,37 +577,10 @@ export const useBleStore = defineStore('ble', () => {
     clearError()
     await stopMonitor()
 
-    monitorSnapshot.value = null
-    monitorSamples.value = []
-    lastMonitorSampleAt = 0
-
-    const session = createRadarMonitorSession(connection)
-    const offSnapshot = session.onSnapshot(handleMonitorSnapshot)
-
-    monitorSession = session
-    stopMonitorSnapshotListener = offSnapshot
-
     try {
-      const response = await session.start({
-        interval: MONITOR_INTERVAL,
-      })
-      assertCommandSuccess(response, '启动实时监控失败')
-
-      monitoring.value = true
-
-      return response
+      return await openMonitorSession(connection)
     }
     catch (error) {
-      offSnapshot()
-
-      try {
-        await session.close()
-      }
-      catch {
-        // 启动失败后的清理不覆盖真正的启动失败原因。
-      }
-
-      resetMonitorData()
       errorMessage.value = '启动实时监控失败'
       throw error
     }
@@ -681,6 +769,8 @@ export const useBleStore = defineStore('ble', () => {
       throw error
     }
   }
+
+  ensureConnectionStateListener()
 
   /*
    * 暴露给页面使用的状态和 action。

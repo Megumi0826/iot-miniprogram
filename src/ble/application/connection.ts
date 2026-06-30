@@ -9,6 +9,7 @@ import {
   getBleDeviceCharacteristics,
   getBleDeviceServices,
   notifyBleCharacteristic,
+  openBleAdapter,
 } from '../transport'
 import { createBleCommandSession } from './command'
 
@@ -107,6 +108,7 @@ async function enableNotifies(refs: BleCharacteristicRef[]): Promise<void> {
  * 连接本地 BLE 设备，并初始化到“可以发命令”的状态。
  *
  * 这个方法会完成：
+ * - 打开 BLE 适配器
  * - BLE 连接
  * - service 发现
  * - characteristic 发现
@@ -133,6 +135,7 @@ export async function connectLocalDevice(
   let connected = false
 
   try {
+    await openBleAdapter()
     await connectBleDevice(deviceId)
     connected = true
 

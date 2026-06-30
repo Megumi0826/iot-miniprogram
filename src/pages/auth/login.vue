@@ -113,7 +113,7 @@ async function handleLogin() {
   box-sizing: border-box;
   background:
     radial-gradient(circle at 74% 18%, var(--app-primary-soft), transparent 34%),
-    radial-gradient(circle at 12% 76%, rgba(54, 217, 255, 0.12), transparent 30%), var(--app-bg);
+    radial-gradient(circle at 12% 76%, rgba(54, 217, 255, 0.12), transparent 30%), var(--app-page-bg);
   color: var(--app-text);
 }
 

@@ -1,12 +1,3 @@
-/** BLE 连接流程在小程序内使用的轻量状态。 */
-export type BleConnectionState = | 'idle'
-  | 'adapterReady'
-  | 'scanning'
-  | 'connecting'
-  | 'connected'
-  | 'disconnected'
-  | 'error'
-
 /** 扫描到的蓝牙设备，来源于 uni.onBluetoothDeviceFound 的常用字段整理。 */
 export interface BleScanDevice {
   /** uni 蓝牙 API 使用的设备唯一标识。 */
